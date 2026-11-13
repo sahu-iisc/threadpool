@@ -1,0 +1,10 @@
+[package]
+name = "threadpool_self"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+num_cpus = "*"
+anyhow = "1.0"
+thiserror = "2.0.21"
+futures = { version = "0.3.34", features = ["thread-pool"] }
