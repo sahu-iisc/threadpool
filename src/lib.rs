@@ -60,7 +60,7 @@ impl ThreadPool{
     where
         F: FnOnce() + Send + 'static,
     {
-        self.shared_data.queued_count.fetch_add(1, Ordering::Relaxed);
+        self.shared_data.queued_count.fetch_add(1, Ordering::SeqCst);
         let job = Box::new(job);
         self.channel.as_ref().unwrap().send(job).unwrap();
     }
@@ -70,7 +70,7 @@ impl ThreadPool{
     }
 
     pub fn active_count(&self) -> usize {
-        self.shared_data.active_count.load(Ordering::SeqCst)
+        self.shared_data.active_count.load(Ordering::Relaxed)
     }
 
     pub fn running_count(&self) -> usize {
@@ -83,7 +83,7 @@ impl ThreadPool{
 
     pub fn set_num_threads(&self, num_threads: usize) {
 
-        let prev_count = self.shared_data.max_thread_count.swap(num_threads, Ordering::Release);
+        let prev_count = self.shared_data.max_thread_count.swap(num_threads, Ordering::Relaxed);
         if let Some(count) = num_threads.checked_sub(prev_count) {
             for _ in 0..count {
                 spawn_in_pool(self.shared_data.clone());
@@ -166,7 +166,7 @@ impl ThreadPool{
             lock = self.shared_data.empty_condvar.wait(lock).unwrap();
         }
 
-        self.shared_data.join_generation.compare_exchange(generation, generation + 1, Ordering::Release, Ordering::Relaxed).unwrap();
+        let _ = self.shared_data.join_generation.compare_exchange(generation, generation + 1, Ordering::Release, Ordering::Relaxed);
     }
 }
 
@@ -283,7 +283,7 @@ impl Worker{
 impl Drop for Worker {
     fn drop(&mut self) {
         if self.active {
-            self.is_running_job.then(|| self.shared_data.active_count.fetch_sub(1, Ordering::Relaxed));
+            self.is_running_job.then(|| self.shared_data.active_count.fetch_sub(1, Ordering::SeqCst));
             thread::panicking().then(|| self.shared_data.panic_count.fetch_add(1, Ordering::Relaxed));
             self.shared_data.no_work_notify_all();
             spawn_in_pool(self.shared_data.clone());
